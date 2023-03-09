@@ -86,7 +86,6 @@ bool ReadObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertic
 		}
 
 		input.close();
-
 		return isOk;
 	}
 
@@ -101,6 +100,7 @@ bool ConvertTobObj(const std::string& filename)
 
 	if (ReadObj(filename, faces, vertices, comments))
 	{
+		//Create .bObj verion
 		const string outputName{ filename.substr(0,filename.find('.') + 1) + "bObj" };
 
 		if (std::ofstream output{ outputName, std::ios::binary }; output.is_open())
