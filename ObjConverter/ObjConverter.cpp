@@ -18,12 +18,17 @@ struct Vertex
 	float value1, value2, value3;
 };
 
+struct Normal
+{
+	float value1, value2, value3;
+};
+
 struct Face
 {
 	int value1, value2, value3;
 };
 
-bool ReadObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertices, vector<string>& comments)
+bool ReadObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertices, vector<Normal>& normals, vector<string>& comments)
 {
 	if (std::ifstream input{ filename }; input.is_open())
 	{
@@ -36,6 +41,7 @@ bool ReadObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertic
 		char flagCharacter{};
 		Face face{};
 		Vertex vertex{};
+		Normal normal{};
 
 		while (input.good())
 		{
@@ -60,16 +66,36 @@ bool ReadObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertic
 					isOk = false;
 				}
 				break;
-				//Vertices
+				//Vertices or normals
 			case 'v':
-				if (input >> vertex.value1 && input >> vertex.value2 && input >> vertex.value3)
+				input >> flagCharacter;
+				if (flagCharacter == 'n')
 				{
-					vertices.push_back(vertex);
+					//Normals
+					if (input >> normal.value1 && input >> normal.value2 && input >> normal.value3)
+					{
+						normals.push_back(normal);
+					}
+					else
+					{
+						std::cout << "Invalid normal value: line " << lineCounter << '\n';
+						isOk = false;
+					}
 				}
 				else
 				{
-					std::cout << "Invalid vertex value: line " << lineCounter << '\n';
-					isOk = false;
+					//Vertices
+					input.unget();
+
+					if (input >> vertex.value1 && input >> vertex.value2 && input >> vertex.value3)
+					{
+						vertices.push_back(vertex);
+					}
+					else
+					{
+						std::cout << "Invalid vertex value: line " << lineCounter << '\n';
+						isOk = false;
+					}
 				}
 				break;
 			}
@@ -96,9 +122,10 @@ bool ConvertTobObj(const std::string& filename)
 {
 	vector<Face> faces{};
 	vector<Vertex> vertices{};
+	vector<Normal> normals{};
 	vector<string> comments{};
 
-	if (ReadObj(filename, faces, vertices, comments))
+	if (ReadObj(filename, faces, vertices, normals, comments))
 	{
 		//Create .bObj verion
 		const string outputName{ filename.substr(0,filename.find('.') + 1) + "bObj" };
@@ -137,6 +164,15 @@ bool ConvertTobObj(const std::string& filename)
 				output.write((const char*)&face, sizeof(face));
 			}
 
+			//Normals
+			size = normals.size();
+			output.write((const char*)&size, sizeof(size));
+
+			for (const auto& normal : normals)
+			{
+				output.write((const char*)&normal, sizeof(normal));
+			}
+
 			output.close();
 		}
 
@@ -149,13 +185,14 @@ bool ConvertTobObj(const std::string& filename)
 	}
 }
 
-bool ReadbObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertices, vector<string>& comments)
+bool ReadbObj(const string& filename, vector<Face>& faces, vector<Vertex>& vertices, vector<Normal>& normals, vector<string>& comments)
 {
 	if (std::ifstream input{ filename, std::ios::binary }; input.is_open()) 
 	{
 		size_t size{};
 
 		Vertex vertex{};
+		Normal normal{};
 		Face face{};
 		string comment{};
 
@@ -225,6 +262,23 @@ bool ReadbObj(const string& filename, vector<Face>& faces, vector<Vertex>& verti
 			return false;
 		}
 
+		//Normals
+		if (input.read((char*)&size, sizeof(size)))
+		{
+			for (size_t index{}; index < size; ++index)
+			{
+				input.read((char*)&normal, sizeof(normal));
+				normals.push_back(normal);
+			}
+		}
+		else
+		{
+			std::cout << "Reading number of normals failed\n";
+
+			input.close();
+			return false;
+		}
+
 		input.close();
 		return true;
 	}
@@ -235,12 +289,14 @@ bool ReadbObj(const string& filename, vector<Face>& faces, vector<Vertex>& verti
 bool ConvertToObj(const string& filename, const string& outputName)
 {
 	vector<Vertex> vertices{};
+	vector<Normal> normals{};
 	vector<Face> faces{};
 	vector<string> comments{};
 
-	if (ReadbObj(filename, faces, vertices, comments))
+	if (ReadbObj(filename, faces, vertices, normals, comments))
 	{
 		std::stringstream ss{};
+		constexpr int precision{ 7 };
 
 		//Print comments
 		for (const auto& comment : comments)
@@ -251,7 +307,7 @@ bool ConvertToObj(const string& filename, const string& outputName)
 		//Print vertices
 		for (const auto& vertex : vertices)
 		{
-			ss << "v " << vertex.value1 << ' ' << vertex.value2 << ' ' << vertex.value3 << '\n';
+			ss << "v " << std::scientific << std::setprecision(precision) << vertex.value1 << ' ' << vertex.value2 << ' ' << vertex.value3 << '\n';
 		}
 
 		//Print faces
@@ -260,10 +316,17 @@ bool ConvertToObj(const string& filename, const string& outputName)
 			ss << "f " << face.value1 << ' ' << face.value2 << ' ' << face.value3 << '\n';
 		}
 
+		//Print normals
+		for (const auto& normal : normals)
+		{
+			ss << "vn " << std::scientific << std::setprecision(precision) << normal.value1 << ' ' << normal.value2 << ' ' << normal.value3 << '\n';
+		}
+
 		//Prints to file
 		if (std::ofstream output{ outputName, std::ios::binary }; output.is_open())
 		{
 			output << ss.str();
+			output.close();
 		}
 		else
 		{
@@ -291,14 +354,3 @@ int main()
 		std::cout << "Conversion to Obj went fine!\n";
 	}
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
